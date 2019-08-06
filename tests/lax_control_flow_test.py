@@ -474,6 +474,46 @@ class LaxControlFlowTest(jtu.JaxTestCase):
     self.assertEqual(fun(4), cfun(4))
     self.assertEqual(cfun(4), (4, 2., 4.))
 
+  def testCondBatchedUnbatchedPred(self):
+    def fun(x, y):
+      pred = lax.lt(x, 3)
+      true_fun = lambda y: y
+      false_fun = lambda y: lax.neg(y)
+      return lax.cond(pred, y, true_fun, y, false_fun)
+
+    x = onp.array(2)
+    y = onp.array([1, 2])
+    ans = api.vmap(fun, (None, 0))(x, y)
+    expected = onp.array([1, 2])
+    self.assertAllClose(ans, expected, check_dtypes=False)
+
+    x = onp.array(4)
+    ans = api.vmap(fun, (None, 0))(x, y)
+    expected = onp.array([-1, -2])
+    self.assertAllClose(ans, expected, check_dtypes=False)
+
+    fun = api.jit(fun)
+    ans = api.vmap(fun, (None, 0))(x, y)
+    expected = onp.array([-1, -2])
+    self.assertAllClose(ans, expected, check_dtypes=False)
+
+  def testCondBatchedBatchedPred(self):
+    def fun(x):
+      pred = lax.lt(x, 3)
+      true_fun = lambda x: x
+      false_fun = lambda x: lax.neg(x)
+      return lax.cond(pred, x, true_fun, x, false_fun)
+
+    x = onp.array([1, 2, 4])
+    ans = api.vmap(fun)(x)
+    expected = onp.array([1, 2, -4])
+    self.assertAllClose(ans, expected, check_dtypes=False)
+
+    fun = api.jit(fun)
+    ans = api.vmap(fun)(x)
+    expected = onp.array([1, 2, -4])
+    self.assertAllClose(ans, expected, check_dtypes=False)
+
   def testIssue514(self):
     # just check this doesn't crash
     lax.cond(True,
